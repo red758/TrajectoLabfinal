@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrajectoLab | Precision Physics Engine</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #00f2ff; --secondary: #7000ff; --earth: #4ecca3; --bg: #050510; --glass: rgba(20, 20, 30, 0.8); --danger: #ff4d4d; }
+        body { margin: 0; background: var(--bg); color: white; font-family: 'Rajdhani', sans-serif; overflow: hidden; display: flex; height: 100vh; user-select: none; cursor: default; }
+        
+        /* Sci-Fi Grid Background */
+        .grid-bg { 
+            position: absolute; top: 0; left: 0; width: 200%; height: 200%; 
+            background-image: 
+                linear-gradient(rgba(0, 242, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 242, 255, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+            transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
+            z-index: 0; pointer-events: none;
+        }
+
+        /* SMART TOOLTIP */
+        #ctx-tooltip {
+            position: fixed; display: none; z-index: 9999;
+            background: rgba(0, 0, 0, 0.95); border: 1px solid var(--primary);
+            padding: 12px; width: 260px; border-radius: 4px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+        }
+        #ctx-tooltip h3 { margin: 0 0 8px 0; font-family: 'Orbitron'; color: var(--primary); font-size: 1rem; border-bottom: 1px solid #333; padding-bottom: 5px; letter-spacing: 1px; }
+        #ctx-tooltip p { margin: 0; font-size: 0.9rem; color: #ddd; line-height: 1.4; font-weight: 500; }
+        #ctx-tooltip .formula { 
+            margin-top: 10px; font-family: 'Courier New', monospace; color: #ffeb3b; 
+            font-size: 0.85rem; background: rgba(255,255,255,0.1); padding: 6px; 
+            border-radius: 3px; display: block; text-align: center; font-weight: bold;
+        }
+
+        /* Sidebar */
+        .sidebar { 
+            width: 360px; background: rgba(5, 5, 12, 0.95); border-right: 1px solid #333; 
+            padding: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 90; 
+            overflow-y: auto; box-shadow: 10px 0 40px rgba(0,0,0,0.5); backdrop-filter: blur(10px); 
+            transition: transform 0.3s ease-in-out;
+        }
+        .menu-toggle { display: none; position: absolute; top: 15px; left: 15px; z-index: 100; background: rgba(0,0,0,0.8); border: 1px solid var(--primary); color: var(--primary); padding: 8px 12px; font-family: 'Orbitron'; cursor: pointer; border-radius: 4px; }
+
+        h1 { font-family: 'Orbitron'; font-size: 1.6rem; color: var(--primary); margin: 0; letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 0 10px rgba(0, 242, 255, 0.3); }
+        
+        .hologram-box { height: 120px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at center, #111, #000); border-radius: 8px; border: 1px solid #222; position: relative; overflow: hidden; margin-bottom: 5px; }
+        .sphere { width: 70px; height: 70px; border-radius: 50%; background: var(--primary); box-shadow: inset -10px -10px 20px rgba(0,0,0,0.9), 0 0 20px var(--primary); position: relative; animation: spin 20s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .control-group { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 6px; border: 1px solid #333; }
+        label { display: block; font-size: 0.8rem; color: #aaa; text-transform: uppercase; margin-bottom: 5px; cursor: help; font-weight: 600; }
+        span.val { float: right; color: var(--primary); font-weight: bold; font-family: 'Orbitron'; font-size: 0.9rem; }
+        
+        input[type=range] { appearance: none; width: 100%; height: 4px; background: #333; outline: none; margin: 10px 0; cursor: pointer; }
+        input[type=range]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; background: var(--primary); border-radius: 50%; cursor: pointer; transition: 0.2s; box-shadow: 0 0 10px var(--primary); }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        select, input[type=number] { width: 100%; background: #000; color: white; border: 1px solid #444; padding: 10px; border-radius: 4px; font-family: 'Rajdhani'; font-size: 1rem; cursor: pointer; }
+        
+        .btn-launch { background: linear-gradient(45deg, var(--primary), var(--secondary)); border: none; color: white; padding: 15px; font-family: 'Orbitron'; font-weight: bold; border-radius: 5px; cursor: pointer; text-transform: uppercase; margin-top: 5px; transition: 0.3s; font-size: 1rem; letter-spacing: 1px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5); }
+        .btn-launch:hover { filter: brightness(1.2); transform: translateY(-2px); box-shadow: 0 0 30px rgba(0, 242, 255, 0.4); }
+
+        .viewport { flex-grow: 1; position: relative; overflow: hidden; background: #000; transition: transform 0.1s; cursor: crosshair; }
+        canvas { position: relative; width: 100%; height: 100%; z-index: 2; display: block; }
+        
+        /* HUDs */
+        .hud-top { position: absolute; top: 20px; right: 20px; display: flex; gap: 15px; z-index: 5; }
+        .hud-card { background: rgba(0,0,0,0.8); border: 1px solid #444; padding: 10px 20px; border-radius: 4px; text-align: center; min-width: 100px; backdrop-filter: blur(5px); cursor: help; }
+        .hud-card small { font-size: 0.7rem; color: #999; text-transform: uppercase; display: block; letter-spacing: 1px; }
+        .hud-card b { color: var(--primary); font-size: 1.3rem; font-family: 'Orbitron'; }
+        
+        .telemetry-hud { 
+            position: absolute; bottom: 30px; right: 30px; 
+            background: rgba(0,0,0,0.95); padding: 25px; 
+            border-radius: 8px; border: 1px solid #444; border-left: 4px solid var(--primary);
+            z-index: 5; width: 260px; 
+            box-shadow: 0 0 40px rgba(0,0,0,0.5); 
+        }
+        .tel-label { font-size: 0.7rem; color: #666; font-family: 'Orbitron'; margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 5px; letter-spacing: 2px; }
+        .tel-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-family: 'Orbitron'; font-size: 1.1rem; cursor: help; }
+        .tel-row span:first-child { font-size: 0.75rem; color: #aaa; font-family: 'Rajdhani'; font-weight: bold; align-self: center; }
+
+        /* ENERGY BAR */
+        .energy-wrap { margin-top: 15px; cursor: help; }
+        .energy-bar-container { width: 100%; height: 18px; background: #222; border-radius: 3px; display: flex; overflow: hidden; border: 1px solid #555; position: relative; }
+        .energy-k { height: 100%; background: linear-gradient(90deg, #00C9FF, #92FE9D); width: 0%; transition: width 0.1s linear; }
+        .energy-p { height: 100%; background: linear-gradient(90deg, #FC466B, #3F5EFB); width: 0%; transition: width 0.1s linear; }
+        .energy-text { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 5px; font-size: 0.65rem; font-family: 'Orbitron'; color: white; text-shadow: 0 0 4px black; pointer-events: none; z-index: 2; font-weight: bold; }
+        
+        #msg { position: absolute; top: 40%; left: 55%; transform: translate(-50%, -50%); font-family: 'Orbitron'; font-size: 4rem; color: #00ff00; z-index: 10; display: none; text-shadow: 0 0 30px #00ff00; pointer-events: none; white-space: nowrap; }
+        
+        .log-table-container { margin-top:10px; border:1px solid #333; border-radius:5px; padding:10px; background:rgba(0,0,0,0.3); }
+        .log-table-container table { width:100%; font-size:0.75rem; color:#ccc; border-collapse: collapse; }
+        .log-table-container td { padding: 6px; border-bottom: 1px solid #333; }
+        .log-table-container th { text-align:left; color:var(--primary); font-size:0.7rem; text-transform:uppercase; padding-bottom:5px; }
+        .btn-export { width: 100%; background: #111; border: 1px solid var(--primary); color: var(--primary); padding: 8px; margin-top: 8px; font-family: 'Orbitron'; font-size: 0.75rem; cursor: pointer; border-radius: 3px; transition: 0.2s; }
+        .btn-export:hover { background: var(--primary); color: black; }
+
+        .toggle-row { display:flex; gap:10px; margin-bottom:10px; margin-top:10px; flex-wrap: wrap; }
+        .toggle-label { font-size:0.75rem; color:#aaa; display:flex; align-items:center; gap:6px; cursor:pointer; min-width: 45%; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 4px; }
+        .toggle-label:hover { color: white; background: rgba(255,255,255,0.1); }
+        
+        @keyframes floatUp { 0% { opacity:1; transform:translateY(0); } 100% { opacity:0; transform:translateY(-80px); } }
+        .shake-anim { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
+
+        @media (max-width: 900px) {
+            .sidebar { position: absolute; left: 0; transform: translateX(-100%); height: 100%; width: 90%; max-width: 340px; }
+            .sidebar.active { transform: translateX(0); }
+            .menu-toggle { display: block; }
+            .hud-top { flex-direction: column; gap: 5px; right: 10px; top: 60px; scale: 0.9; transform-origin: top right; }
+            .telemetry-hud { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SMART TOOLTIP -->
+    <div id="ctx-tooltip">
+        <h3 id="tt-title">PARAMETER</h3>
+        <p id="tt-desc">Description</p>
+        <span id="tt-form" class="formula">Formula</span>
+    </div>
+
+    <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('active'); sfx('click');">☰ PARAMETERS</button>
+
+    <div class="sidebar">
+        <h1>Trajecto<span style="color:white">Lab</span></h1>
+        
+        <div class="hologram-box">
+            <div id="sphere" class="sphere"></div>
+            <div style="position:absolute; bottom:8px; font-size:0.6rem; color:var(--primary); font-family:'Orbitron'; letter-spacing:1px;">ENVIRONMENTAL SCANNER</div>
+        </div>
+
+        <div class="control-group">
+            <label data-info="velocity">Initial Velocity (v₀)</label>
+            <label style="font-size:0.6rem; color:#777;">LAUNCH SPEED <span class="val" id="vV">80 m/s</span></label>
+            <input type="range" id="vel" min="10" max="250" value="80" oninput="updateInput(this)" onchange="sfx('click')">
+            
+            <label data-info="angle">Launch Angle (θ)</label>
+            <label style="font-size:0.6rem; color:#777;">INCLINATION <span class="val" id="aV">45°</span></label>
+            <input type="range" id="ang" min="0" max="90" value="45" oninput="updateInput(this)" onchange="sfx('click')">
+        </div>
+
+        <div class="control-group">
+            <label data-info="gravity">Planetary Destination (g)</label>
+            <!-- RESTORED ALL PLANETS -->
+            <select id="planet" onchange="updatePlanet(); sfx('click')">
+                <option value="3.7" data-c="#a0aec0" data-d="Mercury: Small planet. High bounce, low gravity.">Mercury</option>
+                <option value="8.87" data-c="#f6ad55" data-d="Venus: Heavy atmosphere. Significant drag expected.">Venus</option>
+                <option value="9.81" selected data-c="#4ecca3" data-d="Earth: Standard gravity (9.81 m/s²). Baseline.">Earth</option>
+                <option value="1.62" data-c="#ffffff" data-d="The Moon: 1/6th Earth gravity. Massive airtime.">The Moon</option>
+                <option value="3.71" data-c="#ff5733" data-d="Mars: 38% Earth gravity. Red Planet trajectory.">Mars</option>
+                <option value="24.79" data-c="#ed8936" data-d="Jupiter: Extreme gravity. Immediate impact likely.">Jupiter</option>
+                <option value="10.44" data-c="#ecc94b" data-d="Saturn: High gravity, but lower density than Jupiter.">Saturn</option>
+                <option value="8.69" data-c="#63b3ed" data-d="Uranus: Cold ice giant. Slightly less than Earth.">Uranus</option>
+                <option value="11.15" data-c="#4299e1" data-d="Neptune: Strong winds. 14% higher gravity.">Neptune</option>
+                <option value="0.62" data-c="#718096" data-d="Pluto: Almost zero gravity. Near orbital velocity.">Pluto</option>
+                <option value="custom" data-c="#ff00ff" data-d="Anomaly: User-defined gravitational constant.">Custom Gravity...</option>
+            </select>
+            <div id="customGBox" style="display:none; margin-top:5px;">
+                <input type="number" id="customG" value="9.8" step="0.1" oninput="updateInput()">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label data-info="drag">Atmosphere Density (ρ)</label>
+            <label style="font-size:0.6rem; color:#777;">AIR RESISTANCE <span class="val" id="dV">0.000</span></label>
+            <input type="range" id="drag" min="0" max="0.1" step="0.001" value="0" oninput="updateInput(this)" onchange="sfx('click')">
+            
+            <div class="toggle-row">
+                <label class="toggle-label" data-info="vectors"><input type="checkbox" id="showVectors" checked onchange="sfx('click')"> Vectors</label>
+                <label class="toggle-label" data-info="ghost"><input type="checkbox" id="showGhost" checked onchange="sfx('click')"> Earth Ghost</label>
+                <label class="toggle-label"><input type="checkbox" id="showIdeal" checked onchange="sfx('click')"> Ideal Vacuum</label>
+                <label class="toggle-label"><input type="checkbox" id="camLock" checked onchange="sfx('click')"> Smart Cam</label>
+                <label class="toggle-label"><input type="checkbox" id="voiceToggle" checked onchange="sfx('click')"> A.I. Voice</label>
+                <label class="toggle-label"><input type="checkbox" id="slowMo" onchange="toggleSlowMo(this)"> Slow Motion</label>
+            </div>
+        </div>
+
+        <div class="insight-panel">
+            <b>PHYSICS INSIGHT</b>
+            <div id="insightText" class="insight-text">Select a planet to begin simulation. Baseline: Earth (9.81 m/s²).</div>
+        </div>
+
+        <button class="btn-launch" onclick="launch()">Initiate Simulation</button>
+        
+        <div class="log-table-container">
+            <table id="logTable">
+                <tr><th>Planet</th><th>Range</th><th>Height</th></tr>
+                <tr><td colspan="3" style="text-align:center; color:#555;">Waiting for launch...</td></tr>
+            </table>
+            <button class="btn-export" onclick="exportData()">&#x2B07; DOWNLOAD CSV REPORT</button>
+        </div>
+    </div>
+
+    <div class="viewport" id="container">
+        <div class="grid-bg"></div>
+        <div class="hud-top">
+            <div class="hud-card score-card" data-info="score"><small>Mission Score</small><b id="scoreVal">0</b></div>
+            <div class="hud-card" data-info="height"><small>Max Altitude</small><b id="stH">0m</b></div>
+            <div class="hud-card" data-info="range"><small>Impact Range</small><b id="stR">0m</b></div>
+            <div class="hud-card" data-info="time"><small>Flight Time</small><b id="stT">0s</b></div>
+        </div>
+
+        <div class="telemetry-hud">
+            <div class="tel-label">REAL-TIME DATA</div>
+            <div class="tel-row" data-info="vx"><span>HORIZONTAL (Vx):</span><span id="vxL" style="color:var(--primary)">0.0</span></div>
+            <div class="tel-row" data-info="vy"><span>VERTICAL (Vy):</span><span id="vyL" style="color:var(--danger)">0.0</span></div>
+            <div class="tel-row" style="border-top:1px solid #333; margin-top:10px; padding-top:10px;" data-info="gravity"><span>GRAVITY (g):</span><span id="gL" style="color:#aaa">9.81</span></div>
+            
+            <div class="energy-wrap" data-info="energy">
+                <div class="tel-label" style="border:none; margin-bottom:5px;">ENERGY CONSERVATION</div>
+                <div class="energy-bar-container">
+                    <div id="kBar" class="energy-k"></div>
+                    <div id="pBar" class="energy-p"></div>
+                    <div class="energy-text">
+                        <span id="keText">KE: 0%</span>
+                        <span id="peText">PE: 0%</span>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.6rem; margin-top:3px; font-family:'Orbitron';">
+                    <span style="color:#00C9FF">KINETIC (SPEED)</span>
+                    <span style="color:#FC466B">POTENTIAL (HEIGHT)</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="msg">TARGET DESTROYED</div>
+        <canvas id="c"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('c'), ctx = canvas.getContext('2d'), container = document.getElementById('container');
+        let projectile = { active: false, x: 0, y: 0, vx: 0, vy: 0 }, 
+            ghostProj = { active: false, x: 0, y: 0, vx: 0, vy: 0 },
+            history = [], ghostPath = [], earthPath = [], particles = [], stars = [], wind = [], shockwaves = [],
+            target = { x: 0, w: 90 }, groundY;
+        let fullDataLog = [], idealPath = [], predictionPath = [], labelQueue = []; 
+        let predStats = { h: 0, r: 0, peakX: 0, peakY: 0 }, ghostStats = { h: "0m", r: "0m" }, earthStats = { h: "0m", r: "0m" };
+        let camera = { x: 0, targetX: 0 }, isDraggingTarget = false, timeScale = 1.0, score = 0;
+
+        // --- ENHANCED INFO DICTIONARY ---
+        const infoData = {
+            "velocity": { t: "Initial Velocity (v₀)", d: "The speed at which the projectile leaves the cannon.", f: "v₀ = Input Value" },
+            "angle": { t: "Launch Angle (θ)", d: "The firing angle. 45° maximizes range in a vacuum.", f: "θ = Input Value" },
+            "gravity": { t: "Gravity (g)", d: "The downward force of the planet. Higher gravity = shorter flight.", f: "g = Planet Constant" },
+            "drag": { t: "Air Resistance (Drag)", d: "Friction from the atmosphere slowing the object down.", f: "Force = 0.5 * ρ * v²" },
+            "vx": { t: "Horizontal Velocity (Vx)", d: "Sideways speed. Constant without air resistance.", f: "Vx = v * cos(θ)" },
+            "vy": { t: "Vertical Velocity (Vy)", d: "Upward/Downward speed. Changes constantly due to gravity.", f: "Vy = v * sin(θ) - gt" },
+            "energy": { t: "Mechanical Energy", d: "Energy transforms from Speed (Kinetic) to Height (Potential) and back.", f: "Total = KE + PE" },
+            "range": { t: "Range (R)", d: "Total horizontal distance traveled on impact.", f: "R = (v² * sin(2θ)) / g" },
+            "height": { t: "Max Altitude (H)", d: "The highest point (peak) of the trajectory.", f: "H = (v² * sin²(θ)) / 2g" },
+            "score": { t: "Mission Score", d: "Points for accuracy. Hitting targets on high-gravity planets awards more points.", f: "Score = Dist * g_factor" },
+            "time": { t: "Time of Flight", d: "Total duration the projectile remains in the air.", f: "t = (2 * v * sin(θ)) / g" },
+            "vectors": { t: "Velocity Vectors", d: "Visual arrows showing speed direction. Cyan=Horizontal, Red=Vertical.", f: "Visual Aid" },
+            "ghost": { t: "Ghost Comparison", d: "Shows where the projectile would land if it were on Earth.", f: "Simulation overlay" },
+            "c_projectile": { t: "Projectile", d: "Current position of the payload.", f: "x(t), y(t)" },
+            "c_target": { t: "Target Zone", d: "Land here to score points. Drag to move.", f: "Width = 90m" },
+            "c_prediction": { t: "Predicted Path", d: "Calculated trajectory based on current physics settings.", f: "Kinematic Eq" }
+        };
+
+        // --- SMART HOVER LOGIC ---
+        const tooltip = document.getElementById('ctx-tooltip');
+        const ttTitle = document.getElementById('tt-title');
+        const ttDesc = document.getElementById('tt-desc');
+        const ttForm = document.getElementById('tt-form');
+
+        function showTooltip(key, x, y) {
+            const data = infoData[key];
+            if (!data) return;
+
+            ttTitle.innerText = data.t;
+            ttDesc.innerText = data.d;
+            ttForm.innerText = data.f;
+            tooltip.style.display = 'block';
+
+            const tipWidth = 280; const tipHeight = 100; 
+            let finalX = x + 15; let finalY = y + 15;
+            if (finalX + tipWidth > window.innerWidth) finalX = x - tipWidth - 10;
+            if (finalY + tipHeight > window.innerHeight) finalY = y - tipHeight - 10;
+            tooltip.style.left = finalX + 'px';
+            tooltip.style.top = finalY + 'px';
+        }
+
+        function hideTooltip() { tooltip.style.display = 'none'; }
+
+        // Global Mouse Tracker for Canvas Raycasting
+        let mouse = { x: 0, y: 0 };
+        document.body.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX; mouse.y = e.clientY;
+            const uiTarget = e.target.closest('[data-info]');
+            if (uiTarget) { showTooltip(uiTarget.getAttribute('data-info'), e.clientX, e.clientY); return; }
+
+            if (e.target.id === 'c') {
+                const rect = canvas.getBoundingClientRect();
+                const worldX = (e.clientX - rect.left) + camera.x;
+                const worldY = e.clientY - rect.top;
+
+                if (projectile.active) {
+                    if (Math.hypot(worldX - projectile.x, worldY - projectile.y) < 30) { showTooltip('c_projectile', e.clientX, e.clientY); return; }
+                }
+                
+                if (worldX >= target.x && worldX <= target.x + target.w && Math.abs(worldY - groundY) < 30) {
+                    showTooltip('c_target', e.clientX, e.clientY); return;
+                }
+
+                if (!projectile.active && predictionPath.length > 0) {
+                    for(let p of [predictionPath[0], predictionPath[Math.floor(predictionPath.length/2)], predictionPath[predictionPath.length-1]]) {
+                         if(Math.hypot(worldX - p.x, worldY - p.y) < 50) { showTooltip('c_prediction', e.clientX, e.clientY); return; }
+                    }
+                }
+            }
+            hideTooltip();
+        });
+
+        // --- AUDIO SYSTEM ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        document.body.addEventListener('click', function() { if (audioCtx.state === 'suspended') audioCtx.resume(); }, {once:true});
+        function speak(text) {
+            const toggle = document.getElementById('voiceToggle');
+            if (!toggle || !toggle.checked || !window.speechSynthesis) return;
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text); u.rate = 1.1; u.volume = 0.5;
+            const tech = window.speechSynthesis.getVoices().find(v => v.name.includes('Google US English') || v.name.includes('David'));
+            if(tech) u.voice = tech;
+            window.speechSynthesis.speak(u);
+        }
+        function sfx(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            if (type === 'launch') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            } else if (type === 'hit') {
+                osc.type = 'square'; osc.frequency.setValueAtTime(100, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+            } else if (type === 'click') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+            }
+            osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+        }
+
+        function init() {
+            canvas.width = container.offsetWidth; canvas.height = container.offsetHeight;
+            groundY = canvas.height - 70;
+            stars = Array.from({length: 120}, () => ({x: Math.random()*canvas.width*2, y: Math.random()*canvas.height, s: Math.random()*1.5}));
+            wind = Array.from({length: 50}, () => ({x: Math.random()*canvas.width, y: Math.random()*(groundY-100), s: Math.random()*3 + 1}));
+            resetTarget(); updatePlanet(true); calculatePrediction();
+        }
+
+        function updateInput(el) {
+            if(el?.id === 'vel') document.getElementById('vV').innerText = el.value + " m/s";
+            if(el?.id === 'ang') document.getElementById('aV').innerText = el.value + "°";
+            if(el?.id === 'drag') document.getElementById('dV').innerText = parseFloat(el.value).toFixed(3);
+            calculatePrediction();
+        }
+        function toggleSlowMo(el) { timeScale = el.checked ? 0.2 : 1.0; sfx('click'); }
+
+        function updatePlanet(mute = false) {
+            const sel = document.getElementById('planet'), opt = sel.options[sel.selectedIndex], color = opt.dataset.c;
+            document.documentElement.style.setProperty('--primary', color);
+            document.getElementById('sphere').style.backgroundColor = color;
+            document.getElementById('sphere').style.boxShadow = `inset -15px -15px 30px rgba(0,0,0,0.9), 5px 5px 15px rgba(255,255,255,0.1), 0 0 25px ${color}`;
+            document.getElementById('customGBox').style.display = sel.value === 'custom' ? 'block' : 'none';
+            document.getElementById('gL').innerText = sel.value === 'custom' ? document.getElementById('customG').value : sel.value;
+            document.getElementById('insightText').innerText = opt.dataset.d;
+            if(!mute) speak(`Environment set to ${opt.text.split(':')[0]}`);
+            calculatePrediction();
+        }
+
+        function calculatePrediction() {
+            predictionPath = []; predStats = { h: 0, r: 0, peakX: 0, peakY: groundY };
+            const v = parseFloat(document.getElementById('vel').value), a = (90 - document.getElementById('ang').value) * Math.PI / 180;
+            const d = parseFloat(document.getElementById('drag').value), sel = document.getElementById('planet');
+            const gVal = parseFloat(sel.value === 'custom' ? document.getElementById('customG').value : sel.value);
+            
+            predStats.r = ((v*v*Math.sin(2*a))/gVal).toFixed(1);
+            predStats.h = ((v*v*Math.pow(Math.sin(a),2))/(2*gVal)).toFixed(1);
+
+            let simX = 50, simY = groundY, simVx = Math.sin(a)*(v/8), simVy = -Math.cos(a)*(v/8);
+            for(let i=0; i<1500; i++) {
+                simVx *= (1-d); simVy *= (1-d); simVy += gVal/15;
+                simX += simVx; simY += simVy;
+                if (simY < predStats.peakY) { predStats.peakY = simY; predStats.peakX = simX; }
+                if(i % 3 === 0) predictionPath.push({x: simX, y: simY});
+                if(simY >= groundY) { predictionPath.push({x: simX, y: groundY}); break; }
+            }
+        }
+
+        function calculateIdealPath(v, a, g) {
+            let path = [], simX = 50, simY = groundY, vx = Math.sin(a)*(v/8), vy = -Math.cos(a)*(v/8);
+            for(let i=0; i<800; i++) {
+                vy += g/15; simX += vx; simY += vy;
+                path.push({x: simX, y: simY});
+                if(simY >= groundY) break;
+            }
+            return path;
+        }
+
+        function launch() {
+            document.querySelector('.sidebar').classList.remove('active'); sfx('launch'); 
+            if (history.length > 0) { ghostPath = [...history]; ghostStats = { r: document.getElementById('stR').innerText, h: document.getElementById('stH').innerText }; }
+            const v = parseFloat(document.getElementById('vel').value), a = (90 - document.getElementById('ang').value) * Math.PI / 180;
+            
+            const earthR = (v*v*Math.sin(2*a)/9.81).toFixed(1) + "m", earthH = (v*v*Math.pow(Math.sin(a),2)/(2*9.81)).toFixed(1) + "m";
+            earthStats = { r: earthR, h: earthH };
+
+            projectile = { x: 50, y: groundY, vx: Math.sin(a)*(v/8), vy: -Math.cos(a)*(v/8), active: true };
+            const sel = document.getElementById('planet'), gVal = parseFloat(sel.value === 'custom' ? document.getElementById('customG').value : sel.value);
+            
+            ghostProj = { x: 50, y: groundY, vx: Math.sin(a)*(v/8), vy: -Math.cos(a)*(v/8), active: document.getElementById('showGhost').checked && Math.abs(gVal - 9.81) > 0.1 };
+            idealPath = document.getElementById('showIdeal').checked ? calculateIdealPath(v, a, gVal) : [];
+            history = []; earthPath = []; particles = []; shockwaves = []; document.getElementById('msg').style.display = 'none';
+        }
+
+        // --- RENDER HELPERS ---
+        function addLabel(text, x, y, color) { labelQueue.push({text, x, y, originalY: y, color}); }
+        function renderSmartLabels() {
+            labelQueue.sort((a,b) => b.y - a.y);
+            for (let i = 0; i < labelQueue.length; i++) {
+                let current = labelQueue[i];
+                for (let j = 0; j < i; j++) { if (Math.abs(current.x - labelQueue[j].x) < 60 && current.y > labelQueue[j].y - 15) current.y = labelQueue[j].y - 15; }
+                ctx.fillStyle = current.color; ctx.font = '10px Orbitron'; ctx.textAlign = 'center'; ctx.fillText(current.text, current.x, current.y);
+                if (current.originalY - current.y > 10) {
+                   ctx.beginPath(); ctx.moveTo(current.x, current.y + 2); ctx.lineTo(current.x, current.originalY - 2);
+                   ctx.strokeStyle = current.color; ctx.lineWidth = 1; ctx.globalAlpha = 0.5; ctx.setLineDash([2, 2]); ctx.stroke();
+                   ctx.setLineDash([]); ctx.globalAlpha = 1.0; ctx.fillRect(current.x-1, current.originalY-1, 2, 2);
+                } else ctx.fillRect(current.x-1, current.y+2, 2, 2);
+            }
+            labelQueue = []; 
+        }
+
+        function drawArrow(x, y, vx, vy, color) {
+            const endX = x + vx*8, endY = y + vy*8;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(endX, endY); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+            const angle = Math.atan2(vy, vx);
+            ctx.beginPath(); ctx.moveTo(endX, endY);
+            ctx.lineTo(endX - 6*Math.cos(angle-Math.PI/6), endY - 6*Math.sin(angle-Math.PI/6));
+            ctx.lineTo(endX - 6*Math.cos(angle+Math.PI/6), endY - 6*Math.sin(angle+Math.PI/6));
+            ctx.fillStyle = color; ctx.fill();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            camera.targetX = (document.getElementById('camLock').checked && projectile.active) ? Math.max(0, projectile.x - canvas.width * 0.3) : 0;
+            camera.x += (camera.targetX - camera.x) * 0.1;
+
+            ctx.save(); ctx.translate(-camera.x, 0);
+
+            ctx.fillStyle = '#fff'; stars.forEach(s => ctx.fillRect(s.x, s.y, s.s, s.s));
+        const d = parseFloat(document.getElementById('drag').value);
+
+// Smooth wind response to air density
+const windSpeedMult = 1 + (d * 60);
+const windOpacity = Math.min(0.08 + d * 2.5, 0.35);
+
+ctx.fillStyle = `rgba(255, 255, 255, ${windOpacity})`;
+
+wind.forEach(w => {
+    w.x -= w.s * windSpeedMult;
+
+    // recycle wind smoothly
+    if (w.x < camera.x - 20) {
+        w.x = camera.x + canvas.width + Math.random() * 120;
+        w.y = Math.random() * (groundY - 100);
+        w.s = Math.random() * 3 + 1;
+    }
+
+    ctx.fillRect(w.x, w.y, w.s * 12, 1);
+});
+
+
+            const sel = document.getElementById('planet'), color = sel.options[sel.selectedIndex].dataset.c;
+
+            if (!projectile.active && predictionPath.length > 0) {
+                ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([5, 10]); ctx.globalAlpha = 0.5;
+                ctx.beginPath(); predictionPath.forEach((p, i) => i==0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)); ctx.stroke();
+                addLabel(`Max H: ${predStats.h}m`, predStats.peakX, predStats.peakY - 10, color);
+                addLabel(`Range: ${predStats.r}m`, predictionPath[predictionPath.length-1].x, predictionPath[predictionPath.length-1].y - 10, color);
+                ctx.globalAlpha = 1.0; ctx.setLineDash([]); 
+            }
+
+            ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(camera.x - 100, groundY); ctx.lineTo(camera.x + canvas.width + 100, groundY); ctx.stroke();
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.1)'; ctx.fillRect(target.x, groundY-10, target.w, 10);
+            ctx.strokeStyle = '#00ff00'; ctx.strokeRect(target.x, groundY-10, target.w, 10);
+            ctx.fillStyle = '#00ff00'; ctx.font = '10px Orbitron'; ctx.textAlign = 'left'; ctx.fillText("TARGET", target.x, groundY - 15);
+
+            if(ghostPath.length > 0) {
+                ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ghostPath.forEach((p,i)=>i==0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
+                let peakY = Math.min(...ghostPath.map(p=>p.y));
+                addLabel(`PREV H: ${ghostStats.h}`, ghostPath.find(p=>p.y === peakY).x, peakY - 10, 'rgba(255,255,255,0.5)');
+            }
+            if(earthPath.length > 0) {
+                ctx.setLineDash([2, 4]); ctx.strokeStyle = 'rgba(78, 204, 163, 0.4)'; ctx.beginPath(); earthPath.forEach((p,i)=>i==0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
+                if(earthPath.length > 10) { let peakY = Math.min(...earthPath.map(p=>p.y)); addLabel(`EARTH H: ${earthStats.h}`, earthPath.find(p=>p.y === peakY).x, peakY - 10, 'rgba(78, 204, 163, 0.7)'); }
+            }
+            if(idealPath.length > 0) {
+                ctx.setLineDash([1, 8]); ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.beginPath(); idealPath.forEach((p,i)=>i==0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
+            }
+
+            ctx.setLineDash([]); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); history.forEach((p,i)=>i==0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)); ctx.stroke();
+
+            if (projectile.active) {
+                const gVal = sel.value === 'custom' ? document.getElementById('customG').value : sel.value;
+                projectile.vx *= (1-d); projectile.vy *= (1-d); projectile.vy += (gVal/15) * timeScale;
+                projectile.x += projectile.vx * timeScale; projectile.y += projectile.vy * timeScale;
+                history.push({x: projectile.x, y: projectile.y});
+                
+                document.getElementById('vxL').innerText = (projectile.vx*10).toFixed(1);
+                document.getElementById('vyL').innerText = (Math.abs(projectile.vy*10)).toFixed(1);
+
+                let speedSq = (projectile.vx * projectile.vx) + (projectile.vy * projectile.vy);
+                let currentHeight = Math.max(0, groundY - projectile.y);
+                let gFactor = (gVal/15);
+                let ke = speedSq; 
+                let pe = currentHeight * gFactor * 2; 
+
+                let total = ke + pe;
+                if(total > 0) {
+                    let kPct = Math.round((ke / total) * 100);
+                    let pPct = 100 - kPct;
+                    document.getElementById('kBar').style.width = kPct + "%";
+                    document.getElementById('pBar').style.width = pPct + "%";
+                    
+                    document.getElementById('keText').innerText = `KE: ${kPct}%`;
+                    document.getElementById('peText').innerText = `PE: ${pPct}%`;
+                }
+
+                if(document.getElementById('showVectors').checked) { drawArrow(projectile.x, projectile.y, projectile.vx, 0, color); drawArrow(projectile.x, projectile.y, 0, projectile.vy, '#ff4d4d'); }
+
+                if (projectile.y >= groundY) {
+                    projectile.active = false; projectile.y = groundY; shockwaves.push({x: projectile.x, y: groundY, r: 1, op: 1});
+                    if (projectile.x > target.x && projectile.x < target.x + target.w) {
+                        sfx('hit'); document.getElementById('msg').style.display = 'block'; 
+                        let pts = Math.floor((target.x - 50) / 10 * ((gVal > 15 || gVal < 3) ? 1.5 : 1));
+                        score += pts; document.getElementById('scoreVal').innerText = score;
+                        explode(projectile.x, groundY); container.classList.remove('shake-anim'); void container.offsetWidth; container.classList.add('shake-anim');
+                        setTimeout(() => { resetTarget(); document.getElementById('msg').style.display = 'none'; }, 1500);
+                    } 
+                    finalizeResults(gVal);
+                }
+                ctx.fillStyle = '#fff'; ctx.shadowBlur = 10; ctx.shadowColor = color; ctx.beginPath(); ctx.arc(projectile.x, projectile.y, 6, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
+            } else {
+                document.getElementById('kBar').style.width = "0%";
+                document.getElementById('pBar').style.width = "0%";
+                document.getElementById('keText').innerText = "KE: 0%";
+                document.getElementById('peText').innerText = "PE: 0%";
+            }
+
+            if (ghostProj.active) {
+                ghostProj.vx *= (1-d); ghostProj.vy *= (1-d); ghostProj.vy += (9.81/15) * timeScale;
+                ghostProj.x += ghostProj.vx * timeScale; ghostProj.y += ghostProj.vy * timeScale;
+                earthPath.push({x: ghostProj.x, y: ghostProj.y});
+                if (ghostProj.y >= groundY) ghostProj.active = false;
+            }
+
+            shockwaves.forEach((sw, index) => {
+                sw.r += 2; sw.op -= 0.05;
+                if(sw.op <= 0) shockwaves.splice(index, 1);
+                else { ctx.save(); ctx.translate(sw.x, sw.y); ctx.scale(1, 0.3); ctx.beginPath(); ctx.arc(0, 0, sw.r, 0, Math.PI * 2); ctx.lineWidth = 4; ctx.strokeStyle = `rgba(255, 255, 255, ${sw.op})`; ctx.stroke(); ctx.restore(); }
+            });
+
+            particles.forEach((p, i) => { p.x += p.vx; p.y += p.vy; p.a -= 0.02; ctx.fillStyle = `rgba(0, 252, 255, ${p.a})`; ctx.fillRect(p.x, p.y, 3, 3); if(p.a <= 0) particles.splice(i, 1); });
+            renderSmartLabels(); ctx.restore(); requestAnimationFrame(draw);
+        }
+
+        function finalizeResults(g) {
+            const v = document.getElementById('vel').value, a = document.getElementById('ang').value * Math.PI / 180;
+            const r = (v*v*Math.sin(2*a))/g, h = (v*v*Math.pow(Math.sin(a),2))/(2*g), t = (2*v*Math.sin(a))/g;
+            document.getElementById('stH').innerText = h.toFixed(1) + "m"; document.getElementById('stR').innerText = r.toFixed(1) + "m"; document.getElementById('stT').innerText = t.toFixed(1) + "s";
+            
+            const pName = document.getElementById('planet').options[document.getElementById('planet').selectedIndex].text.split(':')[0];
+            fullDataLog.push([pName, r.toFixed(2), h.toFixed(2), t.toFixed(2), (new Date()).toLocaleTimeString()]);
+            document.getElementById('logTable').innerHTML += `<tr><td>${pName}</td><td>${r.toFixed(0)}m</td><td>${h.toFixed(0)}m</td></tr>`;
+        }
+
+        function exportData() {
+            if(fullDataLog.length === 0) { alert("No mission data to export yet!"); return; }
+            const csvContent = "data:text/csv;charset=utf-8,Planet,Range(m),Height(m),Time(s),Timestamp\n" + fullDataLog.map(e => e.join(",")).join("\n");
+            const link = document.createElement("a"); link.href = encodeURI(csvContent); link.download = "TrajectoLab_Report.csv"; link.click();
+        }
+
+        function explode(x, y) { for(let i=0; i<40; i++) particles.push({x, y, vx: (Math.random()-0.5)*12, vy: -Math.random()*12, a: 1}); }
+        function resetTarget() { target.x = 250 + Math.random() * (canvas.width - 450); }
+        
+        canvas.addEventListener('mousedown', (e) => { if(Math.abs(e.clientX - canvas.getBoundingClientRect().left + camera.x - target.x - 45) < 45) { isDraggingTarget = true; canvas.style.cursor = 'grabbing'; }});
+        window.addEventListener('mouseup', () => isDraggingTarget = false);
+        window.addEventListener('mousemove', (e) => { 
+            const mouseX = e.clientX - canvas.getBoundingClientRect().left + camera.x;
+            if (isDraggingTarget) target.x = Math.max(100, mouseX - 45); 
+        });
+
+        window.onresize = init; init(); draw();
+    </script>
+</body>
+</html>
